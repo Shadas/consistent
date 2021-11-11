@@ -6,6 +6,7 @@ func TestExample(t *testing.T) {
 	c := NewConsistentHash()
 	c.Add("test")
 	c.Add("test1")
+	t.Logf("circle=%v", c.circle)
 	item, err := c.Get("xxx")
 	t.Logf("item=%s, err=%v", item, err)
 	c.Remove(item)

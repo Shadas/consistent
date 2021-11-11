@@ -2,9 +2,14 @@ package consistent
 
 import (
 	"errors"
+	"fmt"
 	"hash/crc32"
 	"sort"
 	"sync"
+)
+
+const (
+	DefaultReplicaNum = 20
 )
 
 var (
@@ -28,14 +33,21 @@ func (u uints) Less(i, j int) bool {
 type ConsistentHash struct {
 	circle map[uint32]string // hash环
 
+	replicaNum int // 虚拟节点复制数，用于提升平衡性
+
 	sortedHashItems uints // hash item的有序排列，用于查找映射的item
 
 	mutex sync.RWMutex
 }
 
 func NewConsistentHash() *ConsistentHash {
+	return NewConsistentHashWithReplicaNum(DefaultReplicaNum)
+}
+
+func NewConsistentHashWithReplicaNum(num int) *ConsistentHash {
 	c := new(ConsistentHash)
 	c.circle = make(map[uint32]string)
+	c.replicaNum = num
 	return c
 }
 
@@ -44,8 +56,11 @@ func (c *ConsistentHash) Add(item string) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	key := c.hashKey(item)
-	c.circle[key] = item
+	for i := 0; i < c.replicaNum; i++ {
+		key := c.hashKey(c.replicaItem(i, item))
+		c.circle[key] = item
+	}
+
 	c.reloadSortedHashItems()
 }
 
@@ -54,8 +69,10 @@ func (c *ConsistentHash) Remove(item string) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	key := c.hashKey(item)
-	delete(c.circle, key)
+	for i := 0; i < c.replicaNum; i++ {
+		key := c.hashKey(c.replicaItem(i, item))
+		delete(c.circle, key)
+	}
 	c.reloadSortedHashItems()
 }
 
@@ -67,6 +84,10 @@ func (c *ConsistentHash) reloadSortedHashItems() {
 	}
 	sort.Sort(sh)
 	c.sortedHashItems = sh
+}
+
+func (c *ConsistentHash) replicaItem(i int, item string) string {
+	return fmt.Sprintf("%d_%s", i, item)
 }
 
 func (c *ConsistentHash) hashKey(item string) uint32 {
