@@ -2,10 +2,13 @@ package consistent
 
 import (
 	"errors"
-	"fmt"
 	"hash/crc32"
 	"sort"
 	"sync"
+)
+
+var (
+	ErrEmptyCircle = errors.New("empty hash circle")
 )
 
 type uints []uint32
@@ -36,16 +39,27 @@ func NewConsistentHash() *ConsistentHash {
 	return c
 }
 
+// 增加节点实例
 func (c *ConsistentHash) Add(item string) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
 	key := c.hashKey(item)
-	fmt.Printf("hash_key=%d with item=%s\n", key, item)
 	c.circle[key] = item
 	c.reloadSortedHashItems()
 }
 
+// 移除节点实例
+func (c *ConsistentHash) Remove(item string) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	key := c.hashKey(item)
+	delete(c.circle, key)
+	c.reloadSortedHashItems()
+}
+
+// 触发排序hash项列表的排序更新，数据从circle里获取，保持二者一致
 func (c *ConsistentHash) reloadSortedHashItems() {
 	sh := uints{}
 	for k, _ := range c.circle {
@@ -63,16 +77,15 @@ func (c *ConsistentHash) Get(name string) (string, error) {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 	if len(c.circle) == 0 {
-		return "", errors.New("empty ch")
+		return "", ErrEmptyCircle
 	}
 	key := c.hashKey(name)     // 获取hash，但是很难直接命中，需要按照某个顺序挂靠
 	searchKey := c.search(key) // 实际挂靠的key
 	item := c.circle[searchKey]
-	fmt.Printf("get name=%s, key=%d, searchKey=%d, item=%s\n", name, key, searchKey, item)
 	return item, nil
 }
 
-// 根据hashkey定位下一个位置的item
+// 根据hashkey定位下一个位置的item的key
 func (c *ConsistentHash) search(key uint32) uint32 {
 	fn := func(n int) bool {
 		return c.sortedHashItems[n] > key
