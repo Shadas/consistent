@@ -30,7 +30,7 @@ type ConsistentHash struct {
 	mutex sync.RWMutex
 }
 
-func New() *ConsistentHash {
+func NewConsistentHash() *ConsistentHash {
 	c := new(ConsistentHash)
 	c.circle = make(map[uint32]string)
 	return c
