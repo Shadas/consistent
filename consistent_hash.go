@@ -14,8 +14,9 @@ const (
 )
 
 var (
-	ErrEmptyCircle = errors.New("empty hash circle")
-	ErrFullCircle  = errors.New("circle has no place")
+	ErrEmptyCircle  = errors.New("empty hash circle")
+	ErrFullCircle   = errors.New("circle has no place")
+	ErrItemNotFound = errors.New("item not found")
 )
 
 type uints []uint32
@@ -45,6 +46,8 @@ type ConsistentHash struct {
 	sortedHashItems uints // hash item的有序排列，用于查找映射的item
 
 	hashFunc func(key string) uint32 // hash func，可自行指定
+
+	totalLoad int64 // 总负载，用于计算有界负载的场景
 
 	mutex sync.RWMutex
 }
