@@ -30,10 +30,15 @@ func (u uints) Less(i, j int) bool {
 	return u[i] < u[j]
 }
 
-type ConsistentHash struct {
-	circle map[uint32]string // hash环
+type Node struct {
+	Name string
+	Load int64
+}
 
-	replicaNum int // 虚拟节点复制数，用于提升平衡性
+type ConsistentHash struct {
+	replicaNum int               // 虚拟节点复制数，用于提升平衡性
+	circle     map[uint32]string // hash环
+	nodeMap    map[string]*Node  // 节点映射，记录负载信息，以及其他后续扩展信息
 
 	sortedHashItems uints // hash item的有序排列，用于查找映射的item
 
@@ -47,6 +52,7 @@ func NewConsistentHash() *ConsistentHash {
 func NewConsistentHashWithReplicaNum(num int) *ConsistentHash {
 	c := new(ConsistentHash)
 	c.circle = make(map[uint32]string)
+	c.nodeMap = make(map[string]*Node)
 	c.replicaNum = num
 	return c
 }
@@ -56,6 +62,13 @@ func (c *ConsistentHash) Add(item string) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
+	if _, ok := c.nodeMap[item]; ok { // 添加已有节点
+		return
+	}
+
+	c.nodeMap[item] = &Node{Name: item}
+
+	// todo: hash冲突处理方案？
 	for i := 0; i < c.replicaNum; i++ {
 		key := c.hashKey(c.replicaItem(i, item))
 		c.circle[key] = item
@@ -65,6 +78,7 @@ func (c *ConsistentHash) Add(item string) {
 }
 
 // 移除节点实例
+// todo：删除改为逻辑删除
 func (c *ConsistentHash) Remove(item string) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
@@ -73,6 +87,9 @@ func (c *ConsistentHash) Remove(item string) {
 		key := c.hashKey(c.replicaItem(i, item))
 		delete(c.circle, key)
 	}
+
+	delete(c.nodeMap, item)
+
 	c.reloadSortedHashItems()
 }
 
@@ -86,10 +103,13 @@ func (c *ConsistentHash) reloadSortedHashItems() {
 	c.sortedHashItems = sh
 }
 
+// 生成虚拟节点的hashkey输入值
 func (c *ConsistentHash) replicaItem(i int, item string) string {
 	return fmt.Sprintf("%d_%s", i, item)
 }
 
+// 生成hashkey
+// todo: 增加可选、可嵌入式hash function
 func (c *ConsistentHash) hashKey(item string) uint32 {
 	return crc32.ChecksumIEEE([]byte(item))
 }
