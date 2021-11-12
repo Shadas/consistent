@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"hash/crc32"
+	"math"
 	"sort"
 	"sync"
 )
@@ -14,6 +15,7 @@ const (
 
 var (
 	ErrEmptyCircle = errors.New("empty hash circle")
+	ErrFullCircle  = errors.New("circle has no place")
 )
 
 type uints []uint32
@@ -58,7 +60,7 @@ func NewConsistentHashWithReplicaNum(num int) *ConsistentHash {
 }
 
 // 增加节点实例
-func (c *ConsistentHash) Add(item string) {
+func (c *ConsistentHash) Add(item string) (err error) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -68,13 +70,26 @@ func (c *ConsistentHash) Add(item string) {
 
 	c.nodeMap[item] = &Node{Name: item}
 
-	// todo: hash冲突处理方案？
 	for i := 0; i < c.replicaNum; i++ {
 		key := c.hashKey(c.replicaItem(i, item))
-		c.circle[key] = item
+		oldKey := key
+		for {
+			if _, ok := c.circle[key]; ok {
+				// conflict
+				key++
+				key %= math.MaxUint32
+				if key == oldKey { // 无处可放
+					return ErrFullCircle
+				}
+			} else {
+				c.circle[key] = item
+				break
+			}
+		}
 	}
 
 	c.reloadSortedHashItems()
+	return
 }
 
 // 移除节点实例
