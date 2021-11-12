@@ -55,6 +55,8 @@ func NewConsistentHash(fns ...OptFunc) *ConsistentHash {
 		return crc32.ChecksumIEEE([]byte(key))
 	}
 	c.replicaNum = DefaultReplicaNum
+	c.circle = make(map[uint32]string)
+	c.nodeMap = make(map[string]*Node)
 	// run optional funcs
 	for _, fn := range fns {
 		fn(c)
