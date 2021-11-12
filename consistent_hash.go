@@ -44,18 +44,21 @@ type ConsistentHash struct {
 
 	sortedHashItems uints // hash item的有序排列，用于查找映射的item
 
+	hashFunc func(key string) uint32 // hash func，可自行指定
+
 	mutex sync.RWMutex
 }
 
-func NewConsistentHash() *ConsistentHash {
-	return NewConsistentHashWithReplicaNum(DefaultReplicaNum)
-}
-
-func NewConsistentHashWithReplicaNum(num int) *ConsistentHash {
+func NewConsistentHash(fns ...OptFunc) *ConsistentHash {
 	c := new(ConsistentHash)
-	c.circle = make(map[uint32]string)
-	c.nodeMap = make(map[string]*Node)
-	c.replicaNum = num
+	c.hashFunc = func(key string) uint32 {
+		return crc32.ChecksumIEEE([]byte(key))
+	}
+	c.replicaNum = DefaultReplicaNum
+	// run optional funcs
+	for _, fn := range fns {
+		fn(c)
+	}
 	return c
 }
 
@@ -124,9 +127,8 @@ func (c *ConsistentHash) replicaItem(i int, item string) string {
 }
 
 // 生成hashkey
-// todo: 增加可选、可嵌入式hash function
 func (c *ConsistentHash) hashKey(item string) uint32 {
-	return crc32.ChecksumIEEE([]byte(item))
+	return c.hashFunc(item)
 }
 
 func (c *ConsistentHash) Get(name string) (string, error) {
